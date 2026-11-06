@@ -5,6 +5,7 @@ import streamlit as st
 
 from app_auth import require_login, sign_out
 from db import clear_predictions, get_predictions, save_prediction
+from tts import listen_button, result_text  # optional voice feature
 from i18n import (
     DEFAULT_LANGUAGE,
     crop_emoji,
@@ -201,6 +202,11 @@ with st.sidebar:
         f"2. {t('step_2')}\n"
         f"3. {t('step_3')}"
     )
+    listen_button(
+        f"{t('about')}. {t('about_text')} {t('how_it_works')}. "
+        f"1. {t('step_1')}. 2. {t('step_2')}. 3. {t('step_3')}.",
+        key="about",
+    )
 
     st.subheader(t("model"))
     st.markdown(
@@ -281,6 +287,7 @@ with result_col:
     if not submitted:
 
         st.info(t("empty_info"))
+        listen_button(t("empty_info"), key="instructions")
 
     else:
 
@@ -333,6 +340,15 @@ with result_col:
             </div>
             """,
             unsafe_allow_html=True
+        )
+
+        listen_button(
+            result_text(
+                crop_name(predicted_crop),
+                confidence,
+                [crop_name(crop) for crop in probability_df["crop"].iloc[1:3]],
+            ),
+            key="result",
         )
 
         st.markdown(f"**🏆 {t('top_crops')}**")
