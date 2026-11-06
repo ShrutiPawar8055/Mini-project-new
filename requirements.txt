@@ -1,4 +1,7 @@
 streamlit>=1.51
+bcrypt
+python-dotenv
+extra_streamlit_components
 altair
 pandas
 numpy>=2.0

@@ -19,3 +19,9 @@ Thumbs.db
 
 # Streamlit secrets
 .streamlit/secrets.toml
+
+# Local auth
+users.json
+
+# Local prediction history (SQLite)
+predictions.db

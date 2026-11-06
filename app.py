@@ -3,9 +3,19 @@ import joblib
 import pandas as pd
 import streamlit as st
 
+from app_auth import require_login, sign_out
+from db import clear_predictions, get_predictions, save_prediction
+from i18n import (
+    DEFAULT_LANGUAGE,
+    crop_emoji,
+    crop_name,
+    language_selector,
+    t,
+)
+
 
 st.set_page_config(
-    page_title="Crop Recommendation System",
+    page_title=t("app_title"),
     page_icon="🌱",
     layout="wide"
 )
@@ -20,22 +30,15 @@ MODEL_NAMES = {
     "DecisionTreeClassifier": "Decision Tree",
 }
 
-# feature: (label, unit, min, max, step, display format, help text)
+# feature: (unit, min, max, step, display format); labels/help come from i18n
 INPUTS = {
-    "N": ("Nitrogen (N)", "kg/ha", 0.0, 150.0, 1.0, "%.0f",
-          "Nitrogen content in the soil"),
-    "P": ("Phosphorus (P)", "kg/ha", 0.0, 150.0, 1.0, "%.0f",
-          "Phosphorus content in the soil"),
-    "K": ("Potassium (K)", "kg/ha", 0.0, 210.0, 1.0, "%.0f",
-          "Potassium content in the soil"),
-    "ph": ("Soil pH", "pH", 0.0, 14.0, 0.1, "%.1f",
-           "Acidity of the soil: below 7 is acidic, above 7 is alkaline"),
-    "temperature": ("Temperature (°C)", "°C", -10.0, 60.0, 0.1, "%.1f",
-                    "Average temperature during the growing season"),
-    "humidity": ("Humidity (%)", "%", 0.0, 100.0, 0.1, "%.1f",
-                 "Average relative humidity"),
-    "rainfall": ("Rainfall (mm)", "mm", 0.0, 500.0, 1.0, "%.1f",
-                 "Average rainfall"),
+    "N": ("kg/ha", 0.0, 150.0, 1.0, "%.0f"),
+    "P": ("kg/ha", 0.0, 150.0, 1.0, "%.0f"),
+    "K": ("kg/ha", 0.0, 210.0, 1.0, "%.0f"),
+    "ph": ("pH", 0.0, 14.0, 0.1, "%.1f"),
+    "temperature": ("°C", -10.0, 60.0, 0.1, "%.1f"),
+    "humidity": ("%", 0.0, 100.0, 0.1, "%.1f"),
+    "rainfall": ("mm", 0.0, 500.0, 1.0, "%.1f"),
 }
 
 DEFAULTS = {
@@ -53,38 +56,8 @@ EXAMPLES = {
     "coffee": [109, 31, 27, 23.1, 50.4, 7.0, 164.5],
 }
 
-CROPS = {
-    "apple": ("Apple", "🍎"),
-    "banana": ("Banana", "🍌"),
-    "blackgram": ("Black Gram", "🫘"),
-    "chickpea": ("Chickpea", "🫘"),
-    "coconut": ("Coconut", "🥥"),
-    "coffee": ("Coffee", "☕"),
-    "cotton": ("Cotton", "☁️"),
-    "grapes": ("Grapes", "🍇"),
-    "jute": ("Jute", "🌿"),
-    "kidneybeans": ("Kidney Beans", "🫘"),
-    "lentil": ("Lentil", "🫘"),
-    "maize": ("Maize", "🌽"),
-    "mango": ("Mango", "🥭"),
-    "mothbeans": ("Moth Beans", "🫘"),
-    "mungbean": ("Mung Bean", "🫛"),
-    "muskmelon": ("Muskmelon", "🍈"),
-    "orange": ("Orange", "🍊"),
-    "papaya": ("Papaya", "🍈"),
-    "pigeonpeas": ("Pigeon Peas", "🫛"),
-    "pomegranate": ("Pomegranate", "🍎"),
-    "rice": ("Rice", "🌾"),
-    "watermelon": ("Watermelon", "🍉"),
-}
 
-
-def crop_name(crop):
-    return CROPS.get(crop, (crop.title(), "🌱"))[0]
-
-
-def crop_emoji(crop):
-    return CROPS.get(crop, (crop.title(), "🌱"))[1]
+st.session_state.setdefault("language", DEFAULT_LANGUAGE)
 
 
 st.markdown(
@@ -157,6 +130,10 @@ st.markdown(
 )
 
 
+# Everything below requires an authenticated session
+client = require_login()
+
+
 # Artifacts saved by Smart_Crop_Recommendation.ipynb (section 2.5)
 @st.cache_resource
 def load_model():
@@ -196,47 +173,45 @@ def load_example():
 
 
 def number_input(feature):
-    label, _, min_value, max_value, step, display_format, help_text = INPUTS[feature]
+    _, min_value, max_value, step, display_format = INPUTS[feature]
     return st.number_input(
-        label,
+        t(f"feat_{feature}"),
         min_value=min_value,
         max_value=max_value,
         step=step,
         format=display_format,
-        help=help_text,
+        help=t(f"help_{feature}"),
         key=feature
     )
 
 
 with st.sidebar:
-    st.header("🌱 About")
-    st.write(
-        "This app recommends the crop best suited to your soil and "
-        "climate, using a machine learning model trained on the "
-        "Kaggle Crop Recommendation dataset."
+    language_selector()
+    st.caption(t("welcome", name=st.session_state.get("user_email") or ""))
+    if st.button(t("logout"), width="stretch"):
+        sign_out(client)
+    st.divider()
+
+    st.header(f"🌱 {t('about')}")
+    st.write(t("about_text"))
+
+    st.subheader(t("how_it_works"))
+    st.markdown(
+        f"1. {t('step_1')}\n"
+        f"2. {t('step_2')}\n"
+        f"3. {t('step_3')}"
     )
 
-    st.subheader("How it works")
+    st.subheader(t("model"))
     st.markdown(
-        """
-        1. Enter your soil nutrients and climate conditions
-        2. Click **Recommend Crop**
-        3. Review the best crop and the alternatives
-        """
-    )
-
-    st.subheader("Model")
-    st.markdown(
-        f"""
-        - **Algorithm:** {model_name}
-        - **Crops:** {len(label_encoder.classes_)}
-        - **Inputs:** 7 soil & climate features
-        - **Preprocessing:** IQR capping + standard scaling
-        """
+        f"- **{t('algorithm')}:** {model_name}\n"
+        f"- **{t('crops')}:** {len(label_encoder.classes_)}\n"
+        f"- **{t('inputs')}:** {t('inputs_value')}\n"
+        f"- **{t('preprocessing')}:** {t('preprocessing_value')}"
     )
 
     st.markdown(
-        "[Dataset on Kaggle]"
+        f"[{t('dataset_link')}]"
         "(https://www.kaggle.com/datasets/atharvaingle/crop-recommendation-dataset)"
     )
 
@@ -244,10 +219,9 @@ with st.sidebar:
 st.markdown(
     f"""
     <div class="hero">
-        <div class="hero-title">🌱 Crop Recommendation System</div>
+        <div class="hero-title">🌱 {t('hero_title')}</div>
         <div class="hero-subtitle">
-            Find the most suitable crop for your field from soil nutrients
-            and climate conditions, powered by <b>{model_name}</b>.
+            {t('hero_subtitle', model=model_name)}
         </div>
     </div>
     """,
@@ -259,14 +233,14 @@ input_col, result_col = st.columns([5, 7], gap="large")
 
 with input_col:
 
-    st.subheader("🌾 Field Conditions")
+    st.subheader(f"🌾 {t('field_conditions')}")
 
     st.selectbox(
-        "Try an example from the test set",
+        t("example_label"),
         ["custom"] + list(EXAMPLES),
         format_func=lambda crop: (
-            "✏️ Custom values" if crop == "custom"
-            else f"{crop_emoji(crop)} {crop_name(crop)} field"
+            f"✏️ {t('custom_values')}" if crop == "custom"
+            else t("example_option", crop=f"{crop_emoji(crop)} {crop_name(crop)}")
         ),
         key="example",
         on_change=load_example
@@ -275,7 +249,7 @@ with input_col:
     with st.form("conditions", border=False):
 
         with st.container(border=True):
-            st.markdown("**🧪 Soil**")
+            st.markdown(f"**🧪 {t('soil')}**")
             soil_col1, soil_col2 = st.columns(2)
             with soil_col1:
                 number_input("N")
@@ -285,7 +259,7 @@ with input_col:
                 number_input("ph")
 
         with st.container(border=True):
-            st.markdown("**🌦️ Climate**")
+            st.markdown(f"**🌦️ {t('climate')}**")
             climate_col1, climate_col2 = st.columns(2)
             with climate_col1:
                 number_input("temperature")
@@ -294,7 +268,7 @@ with input_col:
                 number_input("humidity")
 
         submitted = st.form_submit_button(
-            "🔍 Recommend Crop",
+            f"🔍 {t('recommend_button')}",
             type="primary",
             width="stretch"
         )
@@ -302,14 +276,11 @@ with input_col:
 
 with result_col:
 
-    st.subheader("🌿 Recommendation")
+    st.subheader(f"🌿 {t('recommendation')}")
 
     if not submitted:
 
-        st.info(
-            "Enter your field conditions on the left, or pick an example, "
-            "then click **Recommend Crop** to see the best crop for your field."
-        )
+        st.info(t("empty_info"))
 
     else:
 
@@ -339,15 +310,24 @@ with result_col:
 
         confidence = probability_df.iloc[0]["Probability"]
 
+        # Store the inputs and the model output in SQLite
+        save_prediction(
+            st.session_state.get("user_email") or "anonymous",
+            values,
+            predicted_crop,
+            confidence,
+            probability_df.head(3)[["crop", "Probability"]].values.tolist(),
+        )
+
         st.markdown(
             f"""
             <div class="result-card">
                 <div class="result-emoji">{crop_emoji(predicted_crop)}</div>
                 <div>
-                    <div class="result-label">Recommended crop</div>
+                    <div class="result-label">{t('recommended_crop')}</div>
                     <div class="result-crop">{crop_name(predicted_crop)}</div>
                     <span class="result-pill">
-                        Confidence · {confidence * 100:.1f}%
+                        {t('confidence')} · {confidence * 100:.1f}%
                     </span>
                 </div>
             </div>
@@ -355,7 +335,7 @@ with result_col:
             unsafe_allow_html=True
         )
 
-        st.markdown("**🏆 Top 3 crops**")
+        st.markdown(f"**🏆 {t('top_crops')}**")
 
         medals = ["🥇", "🥈", "🥉"]
 
@@ -379,7 +359,7 @@ with result_col:
                     )
 
         chart_tab, input_tab = st.tabs(
-            ["📊 Probabilities", "🧾 Your Inputs"]
+            [f"📊 {t('tab_probabilities')}", f"🧾 {t('tab_inputs')}"]
         )
 
         with chart_tab:
@@ -398,7 +378,7 @@ with result_col:
             ).encode(
                 x=alt.X(
                     "Probability:Q",
-                    title="Probability",
+                    title=t("probability"),
                     axis=alt.Axis(format="%"),
                     scale=alt.Scale(domain=[0, 1])
                 ),
@@ -421,14 +401,14 @@ with result_col:
 
             st.altair_chart(chart)
 
-            st.caption("Crops with a probability above 0%, up to the top 10.")
+            st.caption(t("probabilities_caption"))
 
         with input_tab:
 
             input_display = pd.DataFrame({
-                "Parameter": [INPUTS[feature][0] for feature in FEATURES],
-                "Value": [values[feature] for feature in FEATURES],
-                "Unit": [INPUTS[feature][1] for feature in FEATURES],
+                t("parameter"): [t(f"feat_{feature}") for feature in FEATURES],
+                t("value"): [values[feature] for feature in FEATURES],
+                t("unit"): [INPUTS[feature][0] for feature in FEATURES],
             })
 
             st.dataframe(
@@ -438,10 +418,72 @@ with result_col:
             )
 
 
+# Prediction history stored in SQLite (db.py)
+st.divider()
+
+st.subheader(f"📜 {t('history_title')}")
+
+user_email = st.session_state.get("user_email") or "anonymous"
+history = get_predictions(user_email)
+
+if history.empty:
+
+    st.info(t("history_empty"))
+
+else:
+
+    stat_col1, stat_col2, stat_col3 = st.columns(3)
+    top_crop = history["predicted_crop"].mode()[0]
+    stat_col1.metric(t("history_total"), len(history))
+    stat_col2.metric(
+        t("history_top_crop"),
+        f"{crop_emoji(top_crop)} {crop_name(top_crop)}"
+    )
+    stat_col3.metric(
+        t("history_avg_confidence"),
+        f"{history['confidence'].mean() * 100:.1f}%"
+    )
+
+    history_display = pd.DataFrame({
+        t("history_date"): history["created_at"],
+        **{t(f"feat_{feature}"): history[feature] for feature in FEATURES},
+        t("recommended_crop"): [
+            f"{crop_emoji(crop)} {crop_name(crop)}"
+            for crop in history["predicted_crop"]
+        ],
+        t("confidence"): history["confidence"] * 100,
+    })
+
+    st.dataframe(
+        history_display,
+        width="stretch",
+        hide_index=True,
+        column_config={
+            t("confidence"): st.column_config.ProgressColumn(
+                t("confidence"), format="%.1f%%", min_value=0, max_value=100
+            ),
+        },
+    )
+
+    download_col, clear_col = st.columns(2)
+
+    with download_col:
+        st.download_button(
+            f"⬇️ {t('history_download')}",
+            history.drop(columns=["user_email"]).to_csv(index=False),
+            file_name="prediction_history.csv",
+            mime="text/csv",
+            width="stretch",
+        )
+
+    with clear_col:
+        if st.button(f"🗑️ {t('history_clear')}", width="stretch"):
+            clear_predictions(user_email)
+            st.rerun()
+
+
 st.divider()
 
 st.caption(
-    "🌱 Crop Recommendation System · "
-    f"Powered by {model_name} · "
-    "Walchand College of Engineering, Sangli"
+    f"🌱 {t('app_title')} · {t('footer', model=model_name)}"
 )

@@ -10,6 +10,8 @@ A machine learning web app that recommends the most suitable crop to grow from *
 
 ## ✨ Features
 
+- **Login required**: simple email-and-password authentication with local hashing (bcrypt), sign-up, and a persistent session cookie
+- **Multilingual UI**: switch between **English, हिंदी (Hindi) and मराठी (Marathi)** at any time
 - **Clean, responsive interface** built with Streamlit, with light and dark mode and mobile support
 - **One-click examples**: load real soil profiles from the test set (rice, cotton, maize, chickpea, apple, coffee)
 - **Recommended crop** with a confidence percentage
@@ -75,6 +77,9 @@ Apple · Banana · Blackgram · Chickpea · Coconut · Coffee · Cotton · Grape
 ```
 Crop-recommendation-System/
 ├── app.py                            # Streamlit web application
+├── auth.py                           # Login gate, cookie session & login screen
+├── i18n.py                           # Translations (English / Hindi / Marathi)
+├── config.yaml                       # User accounts (bcrypt hashes) & cookie settings
 ├── Smart_Crop_Recommendation.ipynb   # EDA, preprocessing, model comparison & evaluation
 ├── best_model.pkl                    # Best model from the notebook (Random Forest)
 ├── scaler.pkl                        # StandardScaler fitted on the training features
@@ -154,7 +159,8 @@ The repository includes a [`render.yaml`](render.yaml) blueprint, so you can dep
 
 1. Sign in to Render with GitHub and open **New → Blueprint**.
 2. Select the `Crop-recommendation-System` repository and click **Apply**.
-3. Render installs `requirements.txt` on Python 3.12 and starts the app with:
+3. Render prompts for the **`SUPABASE_URL`** and **`SUPABASE_KEY`** environment variables (both marked `sync: false` in `render.yaml`). Paste the values from your Supabase project's **Project Settings → API**.
+4. Render installs `requirements.txt` on Python 3.12 and starts the app with:
    ```bash
    streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
    ```
@@ -163,12 +169,21 @@ Every push to `main` triggers a new deploy automatically. On the free plan the s
 
 ---
 
+## 🔐 Authentication & 🌐 Languages
+
+**Login & sign-up.** The app is gated by [`app_auth.py`](app_auth.py); anyone who is not signed in only sees the sign-in / sign-up screen. Accounts are stored locally in `users.json` with **bcrypt-hashed** passwords. The same screen lets new users **create an account**. A session cookie (`crop_auth_user`, 30-day expiry) keeps visitors signed in across reloads.
+
+**Languages.** The UI switches instantly between **English**, **हिंदी** and **मराठी** from the selector on the sign-in screen and in the sidebar. All strings — including crop names — come from [`i18n.py`](i18n.py), so adding a language means adding one dictionary there; nothing else changes.
+
+---
+
 ## 🖥️ How to Use
 
-1. Enter the soil nutrient values: **Nitrogen, Phosphorus and Potassium**.
-2. Enter the environmental conditions: **Temperature, Humidity, Soil pH and Rainfall**.
-3. Click **🔍 Recommend Crop**.
-4. Read the result: the recommended crop, the confidence, the top 3 alternatives and the probability chart.
+1. **Log in or sign up** (pick your language first if you like).
+2. Enter the soil nutrient values: **Nitrogen, Phosphorus and Potassium**.
+3. Enter the environmental conditions: **Temperature, Humidity, Soil pH and Rainfall**.
+4. Click **🔍 Recommend Crop**.
+5. Read the result: the recommended crop, the confidence, the top 3 alternatives and the probability chart.
 
 ---
 
@@ -176,6 +191,8 @@ Every push to `main` triggers a new deploy automatically. On the free plan the s
 
 - **Python**
 - **Streamlit** for the web interface
+- **bcrypt** for local password hashing
+- **extra-streamlit-components** for the session cookie
 - **scikit-learn** for the ML models and preprocessing
 - **pandas / NumPy** for data handling
 - **joblib** for model serialization
